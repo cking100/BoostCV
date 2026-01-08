@@ -1,11 +1,11 @@
 package com.example.Resume.ResumeAI.controller;
 
-import com.atschecker.dto.AuthRequest;
-import com.atschecker.dto.AuthResponse;
-import com.atschecker.dto.RegisterRequest;
-import com.atschecker.model.User;
-import com.atschecker.repository.UserRepository;
-import com.atschecker.security.JwtUtil;
+import com.example.Resume.ResumeAI.dto.AuthRequest;
+import com.example.Resume.ResumeAI.dto.AuthResponse;
+import com.example.Resume.ResumeAI.dto.RegisterRequest;
+import com.example.Resume.ResumeAI.entity.User;
+import com.example.Resume.ResumeAI.repository.UserRepository;
+import com.example.Resume.ResumeAI.security.JwtUtil;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
