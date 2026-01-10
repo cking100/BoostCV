@@ -1,13 +1,37 @@
-import React, { useState, useRef } from "react";
-import { Upload, FileText, Sparkles, Shield, Loader2 } from "lucide-react";
-import api from "./api"; // Import the API service
+import React, { useState, useRef, useEffect } from "react";
+import { 
+  Upload, FileText, Sparkles, Shield, Loader2, 
+  Check, Zap, AlertCircle, ArrowRight, Moon, Sun,
+  Star, Clock, TrendingUp, CheckCircle, X
+} from "lucide-react";
+import api from "./api";
 import "./LandingPage.css";
 
 export default function LandingPage({ setCurrentView, setCurrentResume }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [scoreCount, setScoreCount] = useState(0);
   const fileInputRef = useRef(null);
+
+  // Animate score
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setScoreCount(prev => {
+        if (prev >= 87) {
+          clearInterval(timer);
+          return 87;
+        }
+        return prev + 2;
+      });
+    }, 30);
+    return () => clearInterval(timer);
+  }, []);
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -31,7 +55,6 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
   const handleFileUpload = async (file) => {
     setUploadError(null);
     
-    // Validate file type
     const validTypes = [
       'application/pdf', 
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -42,17 +65,14 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
       return;
     }
 
-    // Validate file size (10MB max)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       setUploadError('File size must be less than 10MB');
       return;
     }
 
-    // Check if user is logged in
     const token = localStorage.getItem('token');
     if (!token) {
-      // Redirect to login/register
       alert('Please sign in to upload and analyze your resume');
       setCurrentView("login");
       return;
@@ -62,18 +82,13 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
 
     try {
       console.log('Uploading file:', file.name);
-      
-      // Call the real backend API
       const response = await api.uploadResume(file);
-      
       console.log('Upload successful:', response);
       
-      // Store the resume data to pass to results page
       if (setCurrentResume) {
         setCurrentResume(response);
       }
       
-      // Navigate to results page after successful upload
       setCurrentView("results");
       
     } catch (error) {
@@ -99,8 +114,7 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
   };
 
   return (
-    <div className="landing-container">
-      {/* Hidden file input */}
+    <div className={`landing-page ${darkMode ? 'dark' : ''}`}>
       <input
         ref={fileInputRef}
         type="file"
@@ -109,159 +123,254 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
         style={{ display: 'none' }}
       />
 
-      {/* HEADER */}
-      <header className="landing-header">
-        <div className="header-inner">
-          <div className="logo">
-            <div className="logo-icon">
-              <Sparkles size={20} />
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="nav-container">
+          <div className="logo-section">
+            <div className="logo-box">
+              <Zap size={24} />
             </div>
-            <span className="logo-title">CraftCV</span>
+            <span className="logo-text">BoostCV</span>
+            <span className="version-badge">Beta</span>
           </div>
-          <nav className="nav">
-            <button
-              onClick={() => setCurrentView("login")}
-              className="nav-btn"
-            >
+          
+          <div className="nav-actions">
+            <button className="theme-btn" onClick={toggleDarkMode}>
+              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button onClick={() => setCurrentView("login")} className="signin-btn">
               Sign In
             </button>
-            <button
-              onClick={() => setCurrentView("register")}
-              className="nav-btn-primary"
-            >
-              Get Started →
+            <button onClick={() => setCurrentView("register")} className="cta-btn">
+              Get Started
             </button>
-          </nav>
-        </div>
-      </header>
-
-      {/* HERO SECTION */}
-      <div className="hero-section">
-        {/* LEFT COLUMN */}
-        <div className="hero-content">
-          <div className="badge">
-            <Sparkles size={14} />
-            <span>AI-POWERED RESUME CHECKER</span>
           </div>
-          
-          <h1 className="hero-title">
-            Is your resume <span className="highlight">good enough</span> to land interviews?
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <main className="hero">
+        <div className="container">
+          {/* Top badge */}
+          <div className="announcement">
+            <Sparkles size={16} />
+            <span>AI-powered resume analysis • Free for students</span>
+          </div>
+
+          {/* Main heading */}
+          <h1 className="heading">
+            Stop getting <span className="highlight-text">rejected</span> by ATS systems
           </h1>
           
-          <p className="hero-subtitle">
-            Get instant AI feedback with 16 crucial checks. Ensure your resume passes ATS systems and catches recruiters' attention.
+          <p className="subheading">
+            Upload your resume and get instant feedback on what's blocking you from landing interviews. 
+            Built by students, for students.
           </p>
 
-          {/* UPLOAD BOX */}
-          <div
-            className={`upload-box ${isDragging ? "drag-active" : ""} ${isUploading ? "uploading" : ""}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={handleUploadClick}
-            style={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}
-          >
-            {!isUploading ? (
-              <>
-                <div className="upload-icon-wrapper">
-                  <Upload className="upload-icon" />
-                </div>
-                
-                <p className="upload-title">Drop your resume here</p>
-                <p className="upload-hint">or click to browse files</p>
-                
-                {uploadError && (
-                  <div className="upload-error">
-                    ⚠️ {uploadError}
+
+
+          {/* Main content grid */}
+          <div className="content-grid">
+            {/* Left: Upload */}
+            <div className="upload-section">
+              <div
+                className={`dropzone ${isDragging ? 'dragging' : ''} ${isUploading ? 'uploading' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={!isUploading ? handleUploadClick : undefined}
+              >
+                {!isUploading ? (
+                  <>
+                    <div className="dropzone-icon">
+                      <Upload size={32} />
+                    </div>
+                    <h3 className="dropzone-title">Drop your resume here</h3>
+                    <p className="dropzone-subtitle">or click to browse files</p>
+                    
+                    {uploadError && (
+                      <div className="error-box">
+                        <AlertCircle size={16} />
+                        <span>{uploadError}</span>
+                        <button onClick={(e) => { e.stopPropagation(); setUploadError(null); }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+
+                    <button className="upload-btn" onClick={handleUploadClick}>
+                      <Upload size={18} />
+                      Analyze Resume
+                    </button>
+
+                    <div className="file-info">
+                      <span>PDF or DOCX • Max 10MB</span>
+                      <div className="privacy">
+                        <Shield size={14} />
+                        <span>Private & secure</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="loading-state">
+                    <Loader2 className="spinner" size={40} />
+                    <h3>Analyzing your resume...</h3>
+                    <p>Checking ATS compatibility</p>
+                    <div className="progress-bar">
+                      <div className="progress-fill"></div>
+                    </div>
                   </div>
                 )}
-                
-                <button
-                  onClick={handleUploadClick}
-                  className="upload-btn"
-                  type="button"
-                >
-                  <Upload size={18} />
-                  Upload Your Resume
-                </button>
-                
-                <div className="upload-meta">
-                  <span className="file-types">PDF & DOCX • Max 10MB</span>
-                  <span className="privacy-badge">
-                    <Shield size={14} />
-                    Privacy guaranteed
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="upload-loading">
-                <Loader2 className="spinner" size={48} />
-                <p className="upload-title">Analyzing your resume...</p>
-                <p className="upload-hint">Extracting text and checking ATS compatibility</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN */}
-        <div className="hero-preview">
-          <div className="preview-card">
-            <div className="preview-header">
-              <div className="preview-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <span className="preview-title">Resume Analysis</span>
-            </div>
-            
-            <div className="preview-content">
-              <div className="scan-animation">
-                <div className="scan-line"></div>
-              </div>
-              
-              <div className="preview-checks">
-                <div className="check-item">
-                  <div className="check-icon success"></div>
-                  <span>ATS Compatibility</span>
-                </div>
-                <div className="check-item">
-                  <div className="check-icon success"></div>
-                  <span>Contact Information</span>
-                </div>
-                <div className="check-item">
-                  <div className="check-icon warning"></div>
-                  <span>Keywords Optimization</span>
-                </div>
-                <div className="check-item">
-                  <div className="check-icon success"></div>
-                  <span>Formatting Consistency</span>
-                </div>
               </div>
 
-              <div className="score-display">
-                <div className="score-circle">
-                  <span className="score-number">87</span>
-                  <span className="score-label">/100</span>
+              {/* Features list */}
+              <div className="features-list">
+                <div className="feature-item">
+                  <CheckCircle size={18} />
+                  <span>ATS compatibility check</span>
+                </div>
+                <div className="feature-item">
+                  <CheckCircle size={18} />
+                  <span>Keyword optimization</span>
+                </div>
+                <div className="feature-item">
+                  <CheckCircle size={18} />
+                  <span>Format validation</span>
+                </div>
+                <div className="feature-item">
+                  <CheckCircle size={18} />
+                  <span>Industry benchmarking</span>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Floating elements */}
-          <div className="floating-element element-1">
-            <FileText size={24} />
-          </div>
-          <div className="floating-element element-2">
-            <Sparkles size={20} />
+            {/* Right: Preview */}
+            <div className="preview-section">
+              <div className="preview-card">
+                <div className="card-top">
+                  <div className="dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="card-label">Resume Analysis</span>
+                </div>
+
+                <div className="score-container">
+                  <div className="score-ring">
+                    <svg viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="45" className="ring-bg" />
+                      <circle 
+                        cx="50" 
+                        cy="50" 
+                        r="45" 
+                        className="ring-progress"
+                        style={{
+                          strokeDasharray: `${(scoreCount / 100) * 283} 283`
+                        }}
+                      />
+                    </svg>
+                    <div className="score-text">
+                      <div className="score-num">{scoreCount}</div>
+                      <div className="score-label">Score</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="checks-list">
+                  <div className="check-row success">
+                    <Check size={16} />
+                    <span>ATS Compatible</span>
+                  </div>
+                  <div className="check-row success">
+                    <Check size={16} />
+                    <span>Contact Info</span>
+                  </div>
+                  <div className="check-row warning">
+                    <AlertCircle size={16} />
+                    <span>Keywords</span>
+                  </div>
+                  <div className="check-row success">
+                    <Check size={16} />
+                    <span>Formatting</span>
+                  </div>
+                </div>
+
+                <div className="insights">
+                  <div className="insight">
+                    <div className="insight-icon">💡</div>
+                    <span>Add 3 more technical skills</span>
+                  </div>
+                  <div className="insight">
+                    <div className="insight-icon">🎯</div>
+                    <span>Strong action verbs used</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
 
-      {/* Background decorative elements */}
-      <div className="bg-blob blob-1"></div>
-      <div className="bg-blob blob-2"></div>
-      <div className="bg-blob blob-3"></div>
+      {/* Features section */}
+      <section className="features">
+        <div className="container">
+          <h2 className="section-title">Why BoostCV?</h2>
+          <div className="features-grid">
+            <div className="feature-box">
+              <div className="feature-icon green">
+                <Zap size={20} />
+              </div>
+              <h3>Lightning Fast</h3>
+              <p>Get results in under 3 seconds. No waiting around.</p>
+            </div>
+
+            <div className="feature-box">
+              <div className="feature-icon blue">
+                <Shield size={20} />
+              </div>
+              <h3>Privacy First</h3>
+              <p>Your resume is analyzed securely. We don't store anything.</p>
+            </div>
+
+            <div className="feature-box">
+              <div className="feature-icon purple">
+                <FileText size={20} />
+              </div>
+              <h3>ATS Optimized</h3>
+              <p>Beat the robots. We check what recruiters' systems look for.</p>
+            </div>
+
+            <div className="feature-box">
+              <div className="feature-icon orange">
+                <TrendingUp size={20} />
+              </div>
+              <h3>Actionable Tips</h3>
+              <p>Get specific improvements, not vague suggestions.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="cta">
+        <div className="cta-box">
+          <h2>Ready to improve your resume?</h2>
+          <p>Get instant AI-powered feedback on your resume</p>
+          <button className="cta-large" onClick={handleUploadClick}>
+            Analyze My Resume
+            <ArrowRight size={20} />
+          </button>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="footer">
+        <div className="container">
+          <p>Made by students, for students 🎓</p>
+          <p className="footer-note">BoostCV • Built with React & Spring Boot</p>
+        </div>
+      </footer>
     </div>
   );
 }
