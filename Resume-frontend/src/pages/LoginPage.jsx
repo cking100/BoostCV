@@ -1,214 +1,436 @@
-import React, { useState } from "react";
-import { Mail, Lock, ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
-import api from "./api"; 
-import "./LoginPage.css";
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, Eye, EyeOff, Zap, ArrowLeft } from 'lucide-react';
+import axios from 'axios';
 
-export default function LoginPage({ setCurrentView }) {
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+export default function LoginPage({ setCurrentView, onLoginSuccess }) {
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
+    email: '',
+    password: '',
+    rememberMe: false
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    const wasRemembered = localStorage.getItem('rememberMe') === 'true';
+    
+    if(wasRemembered && savedEmail){
+      setFormData({
+        email: savedEmail,
+        password: savedPassword || '',
+        rememberMe: true
+      });
+    }
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    setError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError('');
     setIsLoading(true);
 
-    try {
-      console.log("Attempting login with:", formData.email);
-      
-      // Call the actual backend API
-      const response = await api.login(formData.email, formData.password);
-      
-      console.log("Login successful:", response);
-      
-      // Token is automatically saved to localStorage by api.login()
-      // Navigate to dashboard
-      setCurrentView("dashboard");
-      
-    } catch (err) {
-      console.error("Login failed:", err);
-      setError(err.message || "Login failed. Please check your credentials.");
-    } finally {
+    if(!formData.email || !formData.password){
+      setError('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
+
+    try{
+      const response = await axios.post('http://localhost:8080/api/auth/login', {
+        email: formData.email,
+        password: formData.password
+      });
+
+      if(response.data && response.data.token){
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify({
+          email: response.data.email,
+          firstName: response.data.firstName,
+          lastName: response.data.lastName
+        }));
+
+        if(formData.rememberMe){
+          localStorage.setItem('rememberedEmail', formData.email);
+          localStorage.setItem('rememberedPassword', formData.password);
+          localStorage.setItem('rememberMe', 'true');
+        }else{
+          localStorage.removeItem('rememberedEmail');
+          localStorage.removeItem('rememberedPassword');
+          localStorage.removeItem('rememberMe');
+        }
+
+        console.log('Login successful, calling onLoginSuccess');
+        if(onLoginSuccess) onLoginSuccess();
+      }
+    }catch(err){
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.');
       setIsLoading(false);
     }
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
   return (
     <div className="auth-container">
-      <div className="auth-background">
-        <div className="auth-blob blob-1"></div>
-        <div className="auth-blob blob-2"></div>
-        <div className="auth-blob blob-3"></div>
-      </div>
-
-      {/* Back Button */}
-      <button
-        onClick={() => setCurrentView("landing")}
-        className="back-button"
-      >
-        <ArrowLeft size={20} />
-        Back to Home
+      <button 
+        className="back-to-home"
+        onClick={() => setCurrentView('landing')}>
+        <ArrowLeft size={20}/>
+        <span>Back to Home</span>
       </button>
 
-      {/* Login Card */}
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-logo">
-            <div className="auth-logo-icon"></div>
-            <span className="auth-logo-title">CraftCV</span>
+      <div className="auth-box">
+        <div className="auth-logo">
+          <div className="auth-logo-icon">
+            <Zap size={32}/>
           </div>
-          <h1 className="auth-title">Welcome back</h1>
-          <p className="auth-subtitle">
-            Sign in to continue analyzing your resumes
-          </p>
+          <h1>BoostCV</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          {/* Error Message */}
-          {error && (
-            <div style={{
-              background: '#fee2e2',
-              border: '1px solid #fca5a5',
-              color: '#991b1b',
-              padding: '0.75rem 1rem',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-              fontSize: '0.9rem'
-            }}>
-              {error}
-            </div>
-          )}
+        <div className="auth-header">
+          <h2>Welcome Back</h2>
+          <p>Sign in to continue analyzing your resumes</p>
+        </div>
 
+        {error && (
+          <div className="auth-error">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label htmlFor="email" className="form-label">
-              Email Address
-            </label>
-            <div className="input-wrapper">
-              <Mail className="input-icon" size={20} />
+            <label>Email</label>
+            <div className="input-with-icon">
+              <Mail size={20}/>
               <input
                 type="email"
-                id="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="you@example.com"
-                className="form-input"
-                required
+                placeholder="your.email@example.com"
                 disabled={isLoading}
+                autoComplete="email"
               />
             </div>
           </div>
 
           <div className="form-group">
-            <label htmlFor="password" className="form-label">
-              Password
-            </label>
-            <div className="input-wrapper">
-              <Lock className="input-icon" size={20} />
+            <label>Password</label>
+            <div className="input-with-icon">
+              <Lock size={20}/>
               <input
-                type={showPassword ? "text" : "password"}
-                id="password"
+                type={showPassword ? 'text' : 'password'}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="Enter your password"
-                className="form-input"
-                required
                 disabled={isLoading}
+                autoComplete="current-password"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="password-toggle"
-                disabled={isLoading}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                className="toggle-password"
+                onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
               </button>
             </div>
           </div>
 
-          <div className="form-footer">
-            <label className="checkbox-wrapper">
-              <input type="checkbox" disabled={isLoading} />
+          <div className="form-options">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="rememberMe"
+                checked={formData.rememberMe}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
               <span>Remember me</span>
             </label>
-            <button type="button" className="forgot-password" disabled={isLoading}>
-              Forgot password?
+            <button type="button" className="forgot-password">
+              Forgot Password?
             </button>
           </div>
 
           <button 
             type="submit" 
             className="auth-submit-btn"
-            disabled={isLoading}
-            style={{ opacity: isLoading ? 0.7 : 1 }}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
-                Signing in...
-              </>
-            ) : (
-              'Sign In'
-            )}
+            disabled={isLoading}>
+            {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
-
-          <div className="auth-divider">
-            <span>or continue with</span>
-          </div>
-
-          <div className="social-login">
-            <button type="button" className="social-btn" disabled={isLoading}>
-              <svg width="20" height="20" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              Google
-            </button>
-            <button type="button" className="social-btn" disabled={isLoading}>
-              <svg width="20" height="20" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.137 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"
-                />
-              </svg>
-              GitHub
-            </button>
-          </div>
         </form>
 
-        <div className="auth-switch">
-          Don't have an account?{" "}
-          <button onClick={() => setCurrentView("register")} disabled={isLoading}>
-            Sign up for free
-          </button>
+        <div className="auth-footer">
+          <p>
+            Don't have an account?{' '}
+            <button onClick={() => setCurrentView('register')}>
+              Sign Up
+            </button>
+          </p>
         </div>
       </div>
+
+      <style jsx>{`
+        .auth-container {
+          min-height: 100vh;
+          background: #000000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          position: relative;
+        }
+
+        .back-to-home {
+          position: absolute;
+          top: 24px;
+          left: 24px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: transparent;
+          border: 1px solid #262626;
+          color: #ffffff;
+          padding: 10px 16px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+
+        .back-to-home:hover {
+          background: #111111;
+          border-color: #10b981;
+        }
+
+        .auth-box {
+          width: 100%;
+          max-width: 420px;
+          background: #0a0a0a;
+          border: 1px solid #262626;
+          border-radius: 16px;
+          padding: 40px;
+        }
+
+        .auth-logo {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 32px;
+          justify-content: center;
+        }
+
+        .auth-logo-icon {
+          width: 48px;
+          height: 48px;
+          background: #10b981;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+        }
+
+        .auth-logo h1 {
+          font-size: 28px;
+          font-weight: 800;
+          color: #ffffff;
+        }
+
+        .auth-header {
+          text-align: center;
+          margin-bottom: 32px;
+        }
+
+        .auth-header h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 8px;
+        }
+
+        .auth-header p {
+          color: #a3a3a3;
+          font-size: 14px;
+        }
+
+        .auth-error {
+          background: rgba(239, 68, 68, 0.15);
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          color: #ff6b6b;
+          padding: 12px 16px;
+          border-radius: 8px;
+          margin-bottom: 24px;
+          font-size: 14px;
+        }
+
+        .auth-form {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .form-group label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #ffffff;
+        }
+
+        .input-with-icon {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .input-with-icon svg {
+          position: absolute;
+          left: 14px;
+          color: #737373;
+        }
+
+        .input-with-icon input {
+          width: 100%;
+          padding: 12px 14px 12px 44px;
+          background: #111111;
+          border: 1px solid #262626;
+          border-radius: 8px;
+          color: #ffffff;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+
+        .input-with-icon input:focus {
+          outline: none;
+          border-color: #10b981;
+          background: #0a0a0a;
+        }
+
+        .input-with-icon input:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .toggle-password {
+          position: absolute;
+          right: 14px;
+          background: none;
+          border: none;
+          color: #737373;
+          cursor: pointer;
+          padding: 4px;
+          display: flex;
+        }
+
+        .toggle-password:hover {
+          color: #ffffff;
+        }
+
+        .form-options {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          color: #a3a3a3;
+          cursor: pointer;
+        }
+
+        .checkbox-label input {
+          cursor: pointer;
+        }
+
+        .forgot-password {
+          background: none;
+          border: none;
+          color: #10b981;
+          font-size: 14px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .forgot-password:hover {
+          text-decoration: underline;
+        }
+
+        .auth-submit-btn {
+          width: 100%;
+          padding: 14px;
+          background: #10b981;
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .auth-submit-btn:hover:not(:disabled) {
+          background: #059669;
+          transform: translateY(-1px);
+        }
+
+        .auth-submit-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .auth-footer {
+          margin-top: 24px;
+          text-align: center;
+        }
+
+        .auth-footer p {
+          color: #a3a3a3;
+          font-size: 14px;
+        }
+
+        .auth-footer button {
+          background: none;
+          border: none;
+          color: #10b981;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .auth-footer button:hover {
+          text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+          .auth-box {
+            padding: 24px;
+          }
+
+          .back-to-home {
+            top: 16px;
+            left: 16px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
