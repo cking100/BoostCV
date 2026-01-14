@@ -1,175 +1,203 @@
 package com.example.Resume.ResumeAI.service;
 
-import org.springframework.stereotype.Service;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 @Service
 public class ATSCheckerService {
     
-    private static final Set<String> COMMON_TECH_KEYWORDS = new HashSet<>(Arrays.asList(
-        "java", "python", "javascript", "react", "angular", "vue", "spring", "springboot",
-        "nodejs", "express", "mysql", "postgresql", "mongodb", "aws", "azure", "docker",
-        "kubernetes", "git", "agile", "scrum", "rest", "api", "microservices", "sql",
-        "html", "css", "typescript", "c++", "golang", "ruby", "php", "django", "flask"
-    ));
+    private static final Logger logger = LoggerFactory.getLogger(ATSCheckerService.class);
     
-    public Map<String, Object> analyzeResume(String text) {
+    private final GroqAIService groqAIService;
+    
+    public ATSCheckerService(GroqAIService groqAIService) {
+        this.groqAIService = groqAIService;
+    }
+    
+    public Map<String, Object> analyzeResume(String resumeText) {
         Map<String, Object> analysis = new HashMap<>();
         
-        // Extract keywords found
-        Set<String> foundKeywords = extractKeywords(text);
-        analysis.put("keywords", foundKeywords);
-        
-        // Check structure elements
-        boolean hasContactInfo = checkContactInfo(text);
-        boolean hasEmail = checkEmail(text);
-        boolean hasPhone = checkPhone(text);
-        boolean hasLinks = checkLinks(text);
-        boolean hasExperience = checkExperience(text);
-        boolean hasEducation = checkEducation(text);
-        boolean hasSkills = checkSkills(text);
-        
-        analysis.put("hasContactInfo", hasContactInfo);
-        analysis.put("hasEmail", hasEmail);
-        analysis.put("hasPhone", hasPhone);
-        analysis.put("hasLinks", hasLinks);
-        analysis.put("hasExperience", hasExperience);
-        analysis.put("hasEducation", hasEducation);
-        analysis.put("hasSkills", hasSkills);
-        
-        // Calculate ATS score
-        int score = calculateATSScore(foundKeywords, hasContactInfo, hasEmail, hasPhone, 
-                                      hasLinks, hasExperience, hasEducation, hasSkills);
-        analysis.put("atsScore", score);
-        
-        // Generate feedback
-        String feedback = generateFeedback(score, hasContactInfo, hasEmail, hasPhone, 
-                                          hasLinks, hasExperience, hasEducation, hasSkills, 
-                                          foundKeywords);
-        analysis.put("feedback", feedback);
+        try{
+            Map<String, Object> basicChecks = performBasicChecks(resumeText);
+            analysis.putAll(basicChecks);
+            
+            Map<String, Object> aiAnalysis = performAIAnalysis(resumeText);
+            analysis.putAll(aiAnalysis);
+            
+            int atsScore = calculateATSScore(analysis);
+            analysis.put("atsScore", atsScore);
+            analysis.put("feedback", generateFeedback(atsScore, analysis));
+            
+        }catch(Exception e){
+            logger.error("Error analyzing resume", e);
+            analysis.put("atsScore", 0);
+            analysis.put("feedback", "Error analyzing resume: " + e.getMessage());
+        }
         
         return analysis;
     }
     
-    private Set<String> extractKeywords(String text) {
-        String lowerText = text.toLowerCase();
-        return COMMON_TECH_KEYWORDS.stream()
-            .filter(lowerText::contains)
-            .collect(Collectors.toSet());
-    }
-    
-    private boolean checkContactInfo(String text) {
-        return checkEmail(text) || checkPhone(text);
-    }
-    
-    private boolean checkEmail(String text) {
-        Pattern pattern = Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}");
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find();
-    }
-    
-    private boolean checkPhone(String text) {
-        Pattern pattern = Pattern.compile("(\\+?\\d{1,3}[-.\\s]?)?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}");
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find();
-    }
-    
-    private boolean checkLinks(String text) {
-        String lowerText = text.toLowerCase();
-        return lowerText.contains("linkedin.com") || 
-               lowerText.contains("github.com") || 
-               lowerText.contains("portfolio") ||
-               lowerText.contains("http://") ||
-               lowerText.contains("https://");
-    }
-    
-    private boolean checkExperience(String text) {
-        String lowerText = text.toLowerCase();
-        return lowerText.contains("experience") || 
-               lowerText.contains("work history") ||
-               lowerText.contains("employment") ||
-               lowerText.contains("professional background");
-    }
-    
-    private boolean checkEducation(String text) {
-        String lowerText = text.toLowerCase();
-        return lowerText.contains("education") || 
-               lowerText.contains("degree") ||
-               lowerText.contains("university") ||
-               lowerText.contains("college") ||
-               lowerText.contains("bachelor") ||
-               lowerText.contains("master");
-    }
-    
-    private boolean checkSkills(String text) {
-        String lowerText = text.toLowerCase();
-        return lowerText.contains("skills") || 
-               lowerText.contains("technical skills") ||
-               lowerText.contains("competencies");
-    }
-    
-    private int calculateATSScore(Set<String> keywords, boolean hasContactInfo, 
-                                  boolean hasEmail, boolean hasPhone, boolean hasLinks,
-                                  boolean hasExperience, boolean hasEducation, boolean hasSkills) {
-        int score = 0;
+    private Map<String, Object> performBasicChecks(String text) {
+        Map<String, Object> checks = new HashMap<>();
         
-        // Keywords (40 points max)
-        score += Math.min(keywords.size() * 4, 40);
+        String lower = text.toLowerCase();
         
-        // Contact information (20 points)
-        if (hasContactInfo) score += 10;
-        if (hasEmail) score += 5;
-        if (hasPhone) score += 5;
+        checks.put("hasEmail", containsEmail(text));
+        checks.put("hasPhone", containsPhone(text));
+        checks.put("hasLinks", containsLinks(lower));
+        checks.put("hasContactInfo", (boolean)checks.get("hasEmail") || (boolean)checks.get("hasPhone"));
         
-        // Links (10 points)
-        if (hasLinks) score += 10;
+        checks.put("hasExperience", lower.contains("experience") || lower.contains("work") || 
+                                    lower.contains("employment") || lower.contains("position"));
+        checks.put("hasEducation", lower.contains("education") || lower.contains("university") || 
+                                   lower.contains("college") || lower.contains("degree"));
+        checks.put("hasSkills", lower.contains("skills") || lower.contains("technical") || 
+                               lower.contains("proficient"));
         
-        // Structure (30 points)
-        if (hasExperience) score += 15;
-        if (hasEducation) score += 10;
-        if (hasSkills) score += 5;
+        checks.put("wordCount", text.split("\\s+").length);
+        checks.put("characterCount", text.length());
         
-        return Math.min(score, 100);
+        return checks;
     }
     
-    private String generateFeedback(int score, boolean hasContactInfo, boolean hasEmail, 
-                                   boolean hasPhone, boolean hasLinks, boolean hasExperience, 
-                                   boolean hasEducation, boolean hasSkills, Set<String> keywords) {
-        StringBuilder feedback = new StringBuilder();
+    private Map<String, Object> performAIAnalysis(String resumeText) {
+        Map<String, Object> aiResults = new HashMap<>();
         
-        if (score >= 80) {
-            feedback.append("Excellent! Your resume is ATS-friendly. ");
-        } else if (score >= 60) {
-            feedback.append("Good resume, but there's room for improvement. ");
-        } else {
-            feedback.append("Your resume needs significant improvements for ATS systems. ");
+        try{
+            Map<String, Object> atsAnalysis = groqAIService.analyzeResumeForATS(
+                truncate(resumeText, 5000)
+            );
+            
+            if(atsAnalysis.containsKey("keywords")){
+                aiResults.put("keywords", atsAnalysis.get("keywords"));
+            } else {
+                aiResults.put("keywords", extractKeywords(resumeText));
+            }
+            
+            if(atsAnalysis.containsKey("recommendations")){
+                aiResults.put("recommendations", atsAnalysis.get("recommendations"));
+            }
+            
+        }catch(Exception e){
+            logger.error("AI analysis failed, using fallback", e);
+            aiResults.put("keywords", extractKeywords(resumeText));
+            aiResults.put("recommendations", Arrays.asList(
+                "Add more quantifiable achievements",
+                "Include relevant technical skills"
+            ));
         }
         
-        List<String> suggestions = new ArrayList<>();
+        return aiResults;
+    }
+    
+    private int calculateATSScore(Map<String, Object> analysis) {
+        int score = 50;
         
-        if (!hasEmail) suggestions.add("Add a valid email address");
-        if (!hasPhone) suggestions.add("Include a phone number");
-        if (!hasLinks) suggestions.add("Add LinkedIn or GitHub profile links");
-        if (!hasExperience) suggestions.add("Include a clear 'Experience' or 'Work History' section");
-        if (!hasEducation) suggestions.add("Add an 'Education' section");
-        if (!hasSkills) suggestions.add("Create a dedicated 'Skills' section");
-        if (keywords.size() < 5) suggestions.add("Include more relevant technical keywords");
+        if((boolean)analysis.getOrDefault("hasContactInfo", false)) score += 10;
+        if((boolean)analysis.getOrDefault("hasEmail", false)) score += 5;
+        if((boolean)analysis.getOrDefault("hasPhone", false)) score += 5;
+        if((boolean)analysis.getOrDefault("hasExperience", false)) score += 15;
+        if((boolean)analysis.getOrDefault("hasEducation", false)) score += 10;
+        if((boolean)analysis.getOrDefault("hasSkills", false)) score += 10;
         
-        if (!suggestions.isEmpty()) {
-            feedback.append("\n\nSuggestions:\n");
-            for (int i = 0; i < suggestions.size(); i++) {
-                feedback.append((i + 1)).append(". ").append(suggestions.get(i)).append("\n");
+        List<?> keywords = (List<?>)analysis.get("keywords");
+        if(keywords != null && !keywords.isEmpty()){
+            score += Math.min(15, keywords.size() * 2);
+        }
+        
+        int wordCount = (int)analysis.getOrDefault("wordCount", 0);
+        if(wordCount >= 300 && wordCount <= 1000) score += 10;
+        else if(wordCount < 200) score -= 10;
+        
+        return Math.min(100, Math.max(0, score));
+    }
+    
+    private String generateFeedback(int score, Map<String, Object> analysis) {
+        StringBuilder feedback = new StringBuilder();
+        
+        if(score >= 80){
+            feedback.append("Excellent! Your resume is well-optimized for ATS systems. ");
+        } else if(score >= 60){
+            feedback.append("Good job! Your resume is ATS-friendly with room for improvement. ");
+        } else if(score >= 40){
+            feedback.append("Your resume needs work to pass ATS systems effectively. ");
+        } else {
+            feedback.append("Your resume may struggle with ATS systems and needs significant improvements. ");
+        }
+        
+        if(!(boolean)analysis.getOrDefault("hasContactInfo", false)){
+            feedback.append("Add clear contact information. ");
+        }
+        if(!(boolean)analysis.getOrDefault("hasExperience", false)){
+            feedback.append("Include a work experience section. ");
+        }
+        if(!(boolean)analysis.getOrDefault("hasEducation", false)){
+            feedback.append("Add education details. ");
+        }
+        if(!(boolean)analysis.getOrDefault("hasSkills", false)){
+            feedback.append("Include a skills section. ");
+        }
+        
+        List<?> keywords = (List<?>)analysis.get("keywords");
+        if(keywords == null || keywords.size() < 5){
+            feedback.append("Add more relevant keywords and technical terms. ");
+        }
+        
+        return feedback.toString().trim();
+    }
+    
+    private List<String> extractKeywords(String text) {
+        Set<String> keywords = new HashSet<>();
+        String lower = text.toLowerCase();
+        
+        String[] techKeywords = {
+            "java", "python", "javascript", "react", "angular", "vue",
+            "spring", "node", "docker", "kubernetes", "aws", "azure",
+            "sql", "mongodb", "postgresql", "mysql", "git", "agile",
+            "scrum", "ci/cd", "devops", "rest", "api", "microservices",
+            "html", "css", "typescript", "c++", "c#", "ruby", "php",
+            "swift", "kotlin", "flutter", "android", "ios", "linux"
+        };
+        
+        for(String keyword : techKeywords){
+            if(lower.contains(keyword)){
+                keywords.add(keyword.substring(0, 1).toUpperCase() + keyword.substring(1));
             }
         }
         
-        if (!keywords.isEmpty()) {
-            feedback.append("\nKeywords found: ").append(String.join(", ", keywords));
-        }
-        
-        return feedback.toString();
+        return new ArrayList<>(keywords);
+    }
+    
+    private boolean containsEmail(String text) {
+        Pattern emailPattern = Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}");
+        Matcher matcher = emailPattern.matcher(text);
+        return matcher.find();
+    }
+    
+    private boolean containsPhone(String text) {
+        Pattern phonePattern = Pattern.compile("\\+?[1-9]\\d{0,3}[-.\\s]?\\(?\\d{1,4}\\)?[-.\\s]?\\d{1,4}[-.\\s]?\\d{1,9}");
+        Matcher matcher = phonePattern.matcher(text);
+        return matcher.find();
+    }
+    
+    private boolean containsLinks(String text) {
+        return text.contains("linkedin") || text.contains("github") || 
+               text.contains("http") || text.contains("www.");
+    }
+    
+    private String truncate(String text, int maxLength) {
+        if(text == null) return "";
+        return text.length() > maxLength ? text.substring(0, maxLength) : text;
     }
 }
