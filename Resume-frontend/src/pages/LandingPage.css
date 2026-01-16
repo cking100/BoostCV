@@ -748,4 +748,16 @@ body {
   .cta-box h2 {
     font-size: 24px;
   }
+  
+.landing-page {
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
 }
