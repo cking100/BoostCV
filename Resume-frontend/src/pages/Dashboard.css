@@ -36,16 +36,6 @@ body {
   align-items: center;
 }
 
-.spinner-large {
-  color: #10b981;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .toast {
   position: fixed;
   top: 24px;
@@ -124,7 +114,11 @@ body {
   font-weight: 700;
   color: white;
 }
-
+.spinner,
+.spinner-large,
+.btn-spinner {
+  animation: none !important;
+}
 .drag-content p {
   font-size: 16px;
   color: #a3a3a3;
@@ -286,10 +280,6 @@ body {
 .upload-btn-header:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.btn-spinner {
-  animation: spin 1s linear infinite;
 }
 
 .stats-row {
@@ -654,12 +644,15 @@ body {
 }
 
 .score-pill {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 14px;
   border-radius: 100px;
   font-weight: 700;
+  min-width: 60px;
+  white-space: nowrap;
 }
 
 .score-pill.high {
@@ -679,16 +672,13 @@ body {
 
 .score-val {
   font-size: 18px;
+  line-height: 1;
 }
 
 .score-max {
   font-size: 13px;
   opacity: 0.7;
-}
-
-.action-btns {
-  display: flex;
-  gap: 6px;
+  line-height: 1;
 }
 
 .icon-btn {
