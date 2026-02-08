@@ -12,22 +12,7 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
-  const [scoreCount, setScoreCount] = useState(0);
   const fileInputRef = useRef(null);
-
-  // Animate score
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setScoreCount(prev => {
-        if (prev >= 87) {
-          clearInterval(timer);
-          return 87;
-        }
-        return prev + 2;
-      });
-    }, 30);
-    return () => clearInterval(timer);
-  }, []);
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -167,8 +152,6 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
             Built by students, for students.
           </p>
 
-
-
           {/* Main content grid */}
           <div className="content-grid">
             {/* Left: Upload */}
@@ -240,71 +223,6 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
                 <div className="feature-item">
                   <CheckCircle size={18} />
                   <span>Industry benchmarking</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Preview */}
-            <div className="preview-section">
-              <div className="preview-card">
-                <div className="card-top">
-                  <div className="dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span className="card-label">Resume Analysis</span>
-                </div>
-
-                <div className="score-container">
-                  <div className="score-ring">
-                    <svg viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="45" className="ring-bg" />
-                      <circle 
-                        cx="50" 
-                        cy="50" 
-                        r="45" 
-                        className="ring-progress"
-                        style={{
-                          strokeDasharray: `${(scoreCount / 100) * 283} 283`
-                        }}
-                      />
-                    </svg>
-                    <div className="score-text">
-                      <div className="score-num">{scoreCount}</div>
-                      <div className="score-label">Score</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="checks-list">
-                  <div className="check-row success">
-                    <Check size={16} />
-                    <span>ATS Compatible</span>
-                  </div>
-                  <div className="check-row success">
-                    <Check size={16} />
-                    <span>Contact Info</span>
-                  </div>
-                  <div className="check-row warning">
-                    <AlertCircle size={16} />
-                    <span>Keywords</span>
-                  </div>
-                  <div className="check-row success">
-                    <Check size={16} />
-                    <span>Formatting</span>
-                  </div>
-                </div>
-
-                <div className="insights">
-                  <div className="insight">
-                    <div className="insight-icon">💡</div>
-                    <span>Add 3 more technical skills</span>
-                  </div>
-                  <div className="insight">
-                    <div className="insight-icon">🎯</div>
-                    <span>Strong action verbs used</span>
-                  </div>
                 </div>
               </div>
             </div>

@@ -353,16 +353,6 @@ body {
   gap: 16px;
 }
 
-.spinner {
-  color: var(--green);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .loading-state h3 {
   font-size: 18px;
   font-weight: 600;
