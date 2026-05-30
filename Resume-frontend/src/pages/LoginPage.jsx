@@ -1,6 +1,25 @@
+// src/pages/LoginPage.jsx
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, Zap, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Zap, Loader2 } from 'lucide-react';
 import axios from 'axios';
+import './auth.css';
+
+// ── SVG icons for OAuth providers ────────────────────────────────────────────
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+  </svg>
+);
+
+const GitHubIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+  </svg>
+);
+
 
 export default function LoginPage({ setCurrentView, onLoginSuccess }) {
   const [formData, setFormData] = useState({
@@ -13,16 +32,11 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem('rememberedEmail');
-    const savedPassword = localStorage.getItem('rememberedPassword');
+    const savedEmail   = localStorage.getItem('rememberedEmail');
     const wasRemembered = localStorage.getItem('rememberMe') === 'true';
-    
-    if(wasRemembered && savedEmail){
-      setFormData({
-        email: savedEmail,
-        password: savedPassword || '',
-        rememberMe: true
-      });
+    // TODO(security): Never store passwords in localStorage. Only email is recalled.
+    if (wasRemembered && savedEmail) {
+      setFormData(prev => ({ ...prev, email: savedEmail, rememberMe: true }));
     }
   }, []);
 
@@ -40,19 +54,20 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
     setError('');
     setIsLoading(true);
 
-    if(!formData.email || !formData.password){
+    if (!formData.email || !formData.password) {
       setError('Please fill in all fields');
       setIsLoading(false);
       return;
     }
 
-    try{
-      const response = await axios.post('http://localhost:8080/api/auth/login', {
+    try {
+      const response = await axios.post('/api/auth/login', {
         email: formData.email,
         password: formData.password
       });
 
-      if(response.data && response.data.token){
+      if (response.data && response.data.token) {
+        // TODO(security): Migrate token storage from localStorage to HttpOnly cookies for production.
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify({
           email: response.data.email,
@@ -60,377 +75,238 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
           lastName: response.data.lastName
         }));
 
-        if(formData.rememberMe){
+        if (formData.rememberMe) {
           localStorage.setItem('rememberedEmail', formData.email);
-          localStorage.setItem('rememberedPassword', formData.password);
+          // NOTE: Password is intentionally NOT stored — security risk.
           localStorage.setItem('rememberMe', 'true');
-        }else{
+        } else {
           localStorage.removeItem('rememberedEmail');
-          localStorage.removeItem('rememberedPassword');
           localStorage.removeItem('rememberMe');
         }
 
-        console.log('Login successful, calling onLoginSuccess');
-        if(onLoginSuccess) onLoginSuccess();
+        if (onLoginSuccess) onLoginSuccess();
       }
-    }catch(err){
-      console.error('Login error:', err);
-      setError(err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.');
+    } catch (err) {
+      // Log minimal info — no credentials in logs
+      const msg = err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.';
+      setError(typeof msg === 'string' ? msg : 'Login failed. Please check your credentials.');
       setIsLoading(false);
     }
   };
 
+  // ── OAuth social login ───────────────────────────────────────────────────
+  // Redirects to Spring Security OAuth2 endpoints which handle the full flow.
+  // Backend must have spring-boot-starter-oauth2-client configured.
+  const handleOAuth = (provider) => {
+    const BACKEND = '';
+    // The redirect_uri on the backend should send back a JWT via
+    // a redirect to /oauth2/callback?token=... on the frontend.
+    window.location.href = `${BACKEND}/oauth2/authorization/${provider}`;
+  };
+
   return (
-    <div className="auth-container">
-      <button 
-        className="back-to-home"
-        onClick={() => setCurrentView('landing')}>
-        <ArrowLeft size={20}/>
-        <span>Back to Home</span>
-      </button>
-
-      <div className="auth-box">
-        <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <Zap size={32}/>
+    <div className="auth-page">
+      {/* ── Left decorative panel ── */}
+      <div className="auth-panel-left">
+        <div className="auth-brand">
+          <div className="auth-brand-icon">
+            <Zap size={22} />
           </div>
-          <h1>BoostCV</h1>
+          <span className="auth-brand-name">ResumeAI</span>
+          <span className="auth-brand-badge">Beta</span>
         </div>
 
-        <div className="auth-header">
-          <h2>Welcome Back</h2>
-          <p>Sign in to continue analyzing your resumes</p>
-        </div>
-
-        {error && (
-          <div className="auth-error">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label>Email</label>
-            <div className="input-with-icon">
-              <Mail size={20}/>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="your.email@example.com"
-                disabled={isLoading}
-                autoComplete="email"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Password</label>
-            <div className="input-with-icon">
-              <Lock size={20}/>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                disabled={isLoading}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className="toggle-password"
-                onClick={() => setShowPassword(!showPassword)}>
-                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-              </button>
-            </div>
-          </div>
-
-          <div className="form-options">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                name="rememberMe"
-                checked={formData.rememberMe}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
-              <span>Remember me</span>
-            </label>
-            <button type="button" className="forgot-password">
-              Forgot Password?
-            </button>
-          </div>
-
-          <button 
-            type="submit" 
-            className="auth-submit-btn"
-            disabled={isLoading}>
-            {isLoading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="auth-footer">
+        <div className="auth-hero-text">
+          <h2>
+            Land more<br />
+            <span>interviews</span><br />
+            with AI-power
+          </h2>
           <p>
-            Don't have an account?{' '}
-            <button onClick={() => setCurrentView('register')}>
-              Sign Up
-            </button>
+            ResumeAI analyses your resume against ATS systems,
+            matches you to jobs, and coaches you — all in one place.
           </p>
+        </div>
+
+        <div className="auth-features-list">
+          <div className="auth-feature-item">
+            <div className="auth-feature-dot indigo">🎯</div>
+            <span className="auth-feature-label">ATS Score & Keyword Analysis</span>
+          </div>
+          <div className="auth-feature-item">
+            <div className="auth-feature-dot purple">🤖</div>
+            <span className="auth-feature-label">RAG Career Coach (AI Chat)</span>
+          </div>
+          <div className="auth-feature-item">
+            <div className="auth-feature-dot emerald">📄</div>
+            <span className="auth-feature-label">Cover Letter Generator</span>
+          </div>
+          <div className="auth-feature-item">
+            <div className="auth-feature-dot amber">🎤</div>
+            <span className="auth-feature-label">Interview Q&A Coach</span>
+          </div>
+          <div className="auth-feature-item">
+            <div className="auth-feature-dot rose">🗺️</div>
+            <span className="auth-feature-label">90-Day Career Path Plans</span>
+          </div>
         </div>
       </div>
 
-      <style jsx>{`
-        .auth-container {
-          min-height: 100vh;
-          background: #000000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-          position: relative;
-        }
+      {/* ── Right form panel ── */}
+      <div className="auth-panel-right">
+        <button
+          className="auth-back-btn"
+          onClick={() => setCurrentView('landing')}
+          type="button"
+          id="login-back-btn"
+        >
+          <ArrowLeft size={16} />
+          Back to Home
+        </button>
 
-        .back-to-home {
-          position: absolute;
-          top: 24px;
-          left: 24px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: transparent;
-          border: 1px solid #262626;
-          color: #ffffff;
-          padding: 10px 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-          transition: all 0.2s;
-        }
+        <div className="auth-card">
+          {/* Mobile logo */}
+          <div className="auth-logo-mobile">
+            <div className="auth-logo-mobile-icon">
+              <Zap size={20} />
+            </div>
+            <span className="auth-logo-mobile-name">ResumeAI</span>
+          </div>
 
-        .back-to-home:hover {
-          background: #111111;
-          border-color: #10b981;
-        }
+          <div className="auth-header">
+            <h1 className="auth-title">Welcome back</h1>
+            <p className="auth-subtitle">Sign in to your account to continue</p>
+          </div>
 
-        .auth-box {
-          width: 100%;
-          max-width: 420px;
-          background: #0a0a0a;
-          border: 1px solid #262626;
-          border-radius: 16px;
-          padding: 40px;
-        }
+          {error && (
+            <div className="auth-error" role="alert" id="login-error-msg">
+              {error}
+            </div>
+          )}
 
-        .auth-logo {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 32px;
-          justify-content: center;
-        }
+          <form onSubmit={handleSubmit} className="auth-form" id="login-form" noValidate>
+            <div className="form-group">
+              <label htmlFor="login-email" className="form-label">Email</label>
+              <div className="input-wrapper">
+                <Mail className="input-icon" size={17} />
+                <input
+                  type="email"
+                  id="login-email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="your.email@example.com"
+                  className="form-input"
+                  disabled={isLoading}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            </div>
 
-        .auth-logo-icon {
-          width: 48px;
-          height: 48px;
-          background: #10b981;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
+            <div className="form-group">
+              <label htmlFor="login-password" className="form-label">Password</label>
+              <div className="input-wrapper">
+                <Lock className="input-icon" size={17} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="login-password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className="form-input"
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  id="login-toggle-password"
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </div>
 
-        .auth-logo h1 {
-          font-size: 28px;
-          font-weight: 800;
-          color: #ffffff;
-        }
+            <div className="form-footer">
+              <label className="checkbox-wrapper">
+                <input
+                  type="checkbox"
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                  id="login-remember-me"
+                />
+                Remember me
+              </label>
+              <button
+                type="button"
+                className="forgot-link"
+                id="login-forgot-password"
+              >
+                Forgot password?
+              </button>
+            </div>
 
-        .auth-header {
-          text-align: center;
-          margin-bottom: 32px;
-        }
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={isLoading}
+              id="login-submit-btn"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 size={18} className="spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
 
-        .auth-header h2 {
-          font-size: 24px;
-          font-weight: 700;
-          color: #ffffff;
-          margin-bottom: 8px;
-        }
+          {/* ── Social login ── */}
+          <div className="auth-divider">or continue with</div>
+          <div className="social-login">
+            <button
+              type="button"
+              className="social-btn"
+              onClick={() => handleOAuth('google')}
+              disabled={isLoading}
+              id="login-google-btn"
+            >
+              <GoogleIcon />
+              Google
+            </button>
+            <button
+              type="button"
+              className="social-btn"
+              onClick={() => handleOAuth('github')}
+              disabled={isLoading}
+              id="login-github-btn"
+            >
+              <GitHubIcon />
+              GitHub
+            </button>
+          </div>
 
-        .auth-header p {
-          color: #a3a3a3;
-          font-size: 14px;
-        }
+          <div className="auth-switch">
+            Don't have an account?{' '}
+            <button
+              onClick={() => setCurrentView('register')}
+              id="login-go-register"
+            >
+              Create one
+            </button>
+          </div>
+        </div>
+      </div>
 
-        .auth-error {
-          background: rgba(239, 68, 68, 0.15);
-          border: 1px solid rgba(239, 68, 68, 0.4);
-          color: #ff6b6b;
-          padding: 12px 16px;
-          border-radius: 8px;
-          margin-bottom: 24px;
-          font-size: 14px;
-        }
-
-        .auth-form {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .form-group label {
-          font-size: 14px;
-          font-weight: 600;
-          color: #ffffff;
-        }
-
-        .input-with-icon {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .input-with-icon svg {
-          position: absolute;
-          left: 14px;
-          color: #737373;
-        }
-
-        .input-with-icon input {
-          width: 100%;
-          padding: 12px 14px 12px 44px;
-          background: #111111;
-          border: 1px solid #262626;
-          border-radius: 8px;
-          color: #ffffff;
-          font-size: 14px;
-          transition: all 0.2s;
-        }
-
-        .input-with-icon input:focus {
-          outline: none;
-          border-color: #10b981;
-          background: #0a0a0a;
-        }
-
-        .input-with-icon input:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .toggle-password {
-          position: absolute;
-          right: 14px;
-          background: none;
-          border: none;
-          color: #737373;
-          cursor: pointer;
-          padding: 4px;
-          display: flex;
-        }
-
-        .toggle-password:hover {
-          color: #ffffff;
-        }
-
-        .form-options {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          color: #a3a3a3;
-          cursor: pointer;
-        }
-
-        .checkbox-label input {
-          cursor: pointer;
-        }
-
-        .forgot-password {
-          background: none;
-          border: none;
-          color: #10b981;
-          font-size: 14px;
-          cursor: pointer;
-          font-weight: 500;
-        }
-
-        .forgot-password:hover {
-          text-decoration: underline;
-        }
-
-        .auth-submit-btn {
-          width: 100%;
-          padding: 14px;
-          background: #10b981;
-          border: none;
-          border-radius: 8px;
-          color: white;
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .auth-submit-btn:hover:not(:disabled) {
-          background: #059669;
-          transform: translateY(-1px);
-        }
-
-        .auth-submit-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .auth-footer {
-          margin-top: 24px;
-          text-align: center;
-        }
-
-        .auth-footer p {
-          color: #a3a3a3;
-          font-size: 14px;
-        }
-
-        .auth-footer button {
-          background: none;
-          border: none;
-          color: #10b981;
-          font-weight: 600;
-          cursor: pointer;
-          font-size: 14px;
-        }
-
-        .auth-footer button:hover {
-          text-decoration: underline;
-        }
-
-        @media (max-width: 480px) {
-          .auth-box {
-            padding: 24px;
-          }
-
-          .back-to-home {
-            top: 16px;
-            left: 16px;
-          }
-        }
-      `}</style>
     </div>
   );
 }
