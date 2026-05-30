@@ -12,12 +12,13 @@ import {
   Sparkles,
   BarChart3,
   Loader2,
-  Zap
+  Zap,
+  Brain
 } from "lucide-react";
 import api from "./api";
 import "./Dashboard.css";
 
-export default function Dashboard({ setCurrentView, setCurrentResume }) {
+export default function Dashboard({ setCurrentView, setCurrentResume, onLogout, onResumesLoaded }) {
   const [resumes, setResumes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -64,6 +65,7 @@ export default function Dashboard({ setCurrentView, setCurrentResume }) {
       setIsLoading(true);
       const data = await api.getResumes();
       setResumes(data);
+      if (onResumesLoaded) onResumesLoaded(data);  // lift to App for AIHub
       setError(null);
     }catch(err){
       console.error('Error fetching resumes:', err);
@@ -76,7 +78,8 @@ export default function Dashboard({ setCurrentView, setCurrentResume }) {
 
   const handleLogout = () => {
     api.logout();
-    setCurrentView("landing");
+    if (onLogout) onLogout();
+    else setCurrentView("landing");
   };
 
   const handleFileUpload = async (file) => {
@@ -104,6 +107,7 @@ export default function Dashboard({ setCurrentView, setCurrentResume }) {
       showToast('Resume uploaded successfully!', 'success');
       
       if(setCurrentResume) setCurrentResume(response);
+      setIsUploading(false);  // ← reset BEFORE navigating
       setCurrentView("results");
       
     }catch(error){
@@ -227,11 +231,21 @@ export default function Dashboard({ setCurrentView, setCurrentResume }) {
             <FileText size={20}/>
             <span>My Resumes</span>
           </button>
-          <button className="menu-item">
+          <button
+            className="menu-item ai-hub-btn"
+            onClick={() => setCurrentView('aihub')}>
+            <Brain size={20}/>
+            <span>AI Hub</span>
+          </button>
+          <button
+            className="menu-item"
+            onClick={() => setCurrentView('analytics')}>
             <BarChart3 size={20}/>
             <span>Analytics</span>
           </button>
-          <button className="menu-item">
+          <button
+            className="menu-item"
+            onClick={() => setCurrentView('settings')}>
             <Settings size={20}/>
             <span>Settings</span>
           </button>
