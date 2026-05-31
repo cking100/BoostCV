@@ -1,6 +1,10 @@
 // src/pages/api.js
 
-const API_BASE_URL = '/api';
+// In production (Vercel), VITE_API_URL = https://boostcv.onrender.com
+// In local dev, falls back to Vite proxy → localhost:8080
+const API_BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 // Get auth token from localStorage
 const getAuthToken = () => {
