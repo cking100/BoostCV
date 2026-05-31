@@ -64,21 +64,27 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Build allowed origins from env var (comma-separated)
-        // e.g. CORS_ALLOWED_ORIGINS=https://boostcv.vercel.app,http://localhost:5173
-        List<String> origins = new ArrayList<>(Arrays.asList(
+        // Use setAllowedOriginPatterns (supports wildcards) instead of setAllowedOrigins.
+        // This allows every Vercel preview URL (https://*.vercel.app) automatically,
+        // so no config change is needed per deployment.
+        List<String> patterns = new ArrayList<>(Arrays.asList(
             "http://localhost:3000",
             "http://localhost:5173",
             "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173"
+            "http://127.0.0.1:5173",
+            // Wildcard: covers boostcv.vercel.app AND boost-xxx-yyy.vercel.app preview URLs
+            "https://*.vercel.app"
         ));
+
+        // Also add any extra origins from the env var (e.g. a custom domain)
         if (allowedOriginsRaw != null && !allowedOriginsRaw.isBlank()) {
             for (String origin : allowedOriginsRaw.split(",")) {
                 String trimmed = origin.trim();
-                if (!trimmed.isEmpty()) origins.add(trimmed);
+                if (!trimmed.isEmpty()) patterns.add(trimmed);
             }
         }
-        configuration.setAllowedOrigins(origins);
+        // setAllowedOriginPatterns supports wildcards AND works with allowCredentials(true)
+        configuration.setAllowedOriginPatterns(patterns);
 
         // Allow all HTTP methods
         configuration.setAllowedMethods(Arrays.asList(
@@ -93,6 +99,9 @@ public class SecurityConfig {
 
         // Cache preflight response for 1 hour
         configuration.setMaxAge(3600L);
+
+        // Expose Authorization header so the browser can read it from responses
+        configuration.setExposedHeaders(Arrays.asList("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

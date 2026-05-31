@@ -35,22 +35,24 @@ public class WebConfig implements WebMvcConfigurer {
      */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        String[] defaultOrigins = {
+        String[] defaultPatterns = {
             "http://localhost:3000",
             "http://localhost:5173",
             "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173"
+            "http://127.0.0.1:5173",
+            // Covers all Vercel preview + production URLs
+            "https://*.vercel.app"
         };
 
         String[] extraOrigins = (allowedOriginsRaw != null && !allowedOriginsRaw.isBlank())
             ? Arrays.stream(allowedOriginsRaw.split(",")).map(String::trim).toArray(String[]::new)
             : new String[]{};
 
-        String[] allOrigins = Stream.concat(Arrays.stream(defaultOrigins), Arrays.stream(extraOrigins))
+        String[] allPatterns = Stream.concat(Arrays.stream(defaultPatterns), Arrays.stream(extraOrigins))
             .distinct().toArray(String[]::new);
 
         registry.addMapping("/api/**")
-                .allowedOrigins(allOrigins)
+                .allowedOriginPatterns(allPatterns)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization")
