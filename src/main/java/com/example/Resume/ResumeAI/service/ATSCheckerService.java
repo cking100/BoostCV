@@ -1,13 +1,9 @@
 package com.example.Resume.ResumeAI.service;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -16,188 +12,237 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ATSCheckerService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ATSCheckerService.class);
-    
-    private final GroqAIService groqAIService;
-    
-    public ATSCheckerService(GroqAIService groqAIService) {
-        this.groqAIService = groqAIService;
+
+    private final GeminiAIService geminiAIService;
+    private final GroqAIService   groqAIService;
+
+    public ATSCheckerService(GeminiAIService geminiAIService, GroqAIService groqAIService) {
+        this.geminiAIService = geminiAIService;
+        this.groqAIService   = groqAIService;
     }
-    
+
+    // ── Public entry point ─────────────────────────────────────────────────────
+
     public Map<String, Object> analyzeResume(String resumeText) {
         Map<String, Object> analysis = new HashMap<>();
-        
-        try{
-            Map<String, Object> basicChecks = performBasicChecks(resumeText);
-            analysis.putAll(basicChecks);
-            
+
+        try {
+            // Basic regex checks (email, phone, section keywords)
+            analysis.putAll(performBasicChecks(resumeText));
+
+            // Deep AI analysis via Gemini
             Map<String, Object> aiAnalysis = performAIAnalysis(resumeText);
             analysis.putAll(aiAnalysis);
-            
-            int atsScore = calculateATSScore(analysis);
+
+            // Determine final ATS score — prefer AI score, then category-weighted, then basic
+            int atsScore;
+            if (aiAnalysis.containsKey("atsScore")) {
+                Object raw = aiAnalysis.get("atsScore");
+                atsScore = (raw instanceof Number) ? ((Number) raw).intValue() : 0;
+                if (atsScore == 0) {
+                    // AI gave 0 — compute from individual category scores
+                    atsScore = computeScoreFromCategories(analysis);
+                }
+            } else {
+                // AI returned no atsScore at all — compute from categories + basic checks
+                atsScore = computeScoreFromCategories(analysis);
+            }
+
+            // Clamp to [0, 100]
+            atsScore = Math.min(100, Math.max(0, atsScore));
+
             analysis.put("atsScore", atsScore);
-            analysis.put("feedback", generateFeedback(atsScore, analysis));
-            
-        }catch(Exception e){
+            analysis.put("feedback", generateFeedback(atsScore));
+            logger.info("Resume analysis complete. Final ATS score: {}", atsScore);
+
+        } catch (Exception e) {
             logger.error("Error analyzing resume", e);
             analysis.put("atsScore", 0);
             analysis.put("feedback", "Error analyzing resume: " + e.getMessage());
         }
-        
+
         return analysis;
     }
-    
+
+    // ── Basic checks (boolean flags for contact / sections) ────────────────────
+
     private Map<String, Object> performBasicChecks(String text) {
         Map<String, Object> checks = new HashMap<>();
-        
         String lower = text.toLowerCase();
-        
-        checks.put("hasEmail", containsEmail(text));
-        checks.put("hasPhone", containsPhone(text));
-        checks.put("hasLinks", containsLinks(lower));
-        checks.put("hasContactInfo", (boolean)checks.get("hasEmail") || (boolean)checks.get("hasPhone"));
-        
-        checks.put("hasExperience", lower.contains("experience") || lower.contains("work") || 
-                                    lower.contains("employment") || lower.contains("position"));
-        checks.put("hasEducation", lower.contains("education") || lower.contains("university") || 
-                                   lower.contains("college") || lower.contains("degree"));
-        checks.put("hasSkills", lower.contains("skills") || lower.contains("technical") || 
-                               lower.contains("proficient"));
-        
-        checks.put("wordCount", text.split("\\s+").length);
-        checks.put("characterCount", text.length());
-        
+
+        boolean hasEmail = containsEmail(text);
+        boolean hasPhone = containsPhone(text);
+        boolean hasLinks = containsLinks(lower);
+
+        checks.put("hasEmail",       hasEmail);
+        checks.put("hasPhone",       hasPhone);
+        checks.put("hasLinks",       hasLinks);
+        checks.put("hasContactInfo", hasEmail || hasPhone);
+        checks.put("hasExperience",  lower.contains("experience") || lower.contains("work history") || lower.contains("employment"));
+        checks.put("hasEducation",   lower.contains("education") || lower.contains("degree") || lower.contains("university") || lower.contains("college"));
+        checks.put("hasSkills",      lower.contains("skills") || lower.contains("technical"));
+        checks.put("wordCount",      text.split("\\s+").length);
+
         return checks;
     }
-    
+
+    // ── Deep AI analysis ───────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
     private Map<String, Object> performAIAnalysis(String resumeText) {
         Map<String, Object> aiResults = new HashMap<>();
-        
-        try{
-            Map<String, Object> atsAnalysis = groqAIService.analyzeResumeForATS(
-                truncate(resumeText, 5000)
-            );
-            
-            if(atsAnalysis.containsKey("keywords")){
+
+        try {
+            // Choose AI provider: prefer Gemini, fall back to Groq
+            Map<String, Object> atsAnalysis = (groqAIService.isAvailable() && !geminiAIService.isAvailable())
+                    ? groqAIService.analyzeResumeForATS(truncate(resumeText, 6000))
+                    : geminiAIService.analyzeResumeForATS(truncate(resumeText, 6000));
+
+            if (atsAnalysis == null || atsAnalysis.isEmpty()) {
+                logger.warn("AI returned empty analysis map — falling back to basic scoring");
+                return aiResults;
+            }
+
+            // Store the full breakdown for the frontend
+            aiResults.put("atsDetails", atsAnalysis);
+
+            // Extract atsScore — handle Integer, Long, or Double from JSON parse
+            Object scoreObj = atsAnalysis.get("atsScore");
+            if (scoreObj instanceof Number) {
+                aiResults.put("atsScore", ((Number) scoreObj).intValue());
+                logger.info("AI atsScore extracted: {}", ((Number) scoreObj).intValue());
+            } else {
+                logger.warn("atsScore missing or non-numeric in AI response: {}", scoreObj);
+                // Don't put anything — computeScoreFromCategories() will handle it
+            }
+
+            // Keywords (AI may return them, or we leave empty — frontend handles it)
+            if (atsAnalysis.containsKey("keywords")) {
                 aiResults.put("keywords", atsAnalysis.get("keywords"));
             } else {
-                aiResults.put("keywords", extractKeywords(resumeText));
+                aiResults.put("keywords", List.of());
             }
-            
-            if(atsAnalysis.containsKey("recommendations")){
-                aiResults.put("recommendations", atsAnalysis.get("recommendations"));
+
+            // Build flat recommendations from AI top-level list
+            List<String> recs = new ArrayList<>();
+            Object recsObj = atsAnalysis.get("recommendations");
+            if (recsObj instanceof List) {
+                for (Object r : (List<?>) recsObj) {
+                    if (r != null && !r.toString().isBlank()) recs.add(r.toString());
+                }
             }
-            
-        }catch(Exception e){
-            logger.error("AI analysis failed, using fallback", e);
-            aiResults.put("keywords", extractKeywords(resumeText));
-            aiResults.put("recommendations", Arrays.asList(
-                "Add more quantifiable achievements",
-                "Include relevant technical skills"
+            aiResults.put("recommendations", recs);
+
+        } catch (Exception e) {
+            logger.error("AI analysis failed: {}", e.getMessage());
+            aiResults.put("recommendations", List.of(
+                "Add quantified achievements with numbers, percentages, or dollar values",
+                "Use strong action verbs: Led, Built, Delivered, Increased, Reduced",
+                "Add a professional summary section at the top of your resume",
+                "Include relevant industry keywords and certifications",
+                "Expand job descriptions to include scope, action, and measurable result"
             ));
         }
-        
+
         return aiResults;
     }
-    
-    private int calculateATSScore(Map<String, Object> analysis) {
-        int score = 50;
-        
-        if((boolean)analysis.getOrDefault("hasContactInfo", false)) score += 10;
-        if((boolean)analysis.getOrDefault("hasEmail", false)) score += 5;
-        if((boolean)analysis.getOrDefault("hasPhone", false)) score += 5;
-        if((boolean)analysis.getOrDefault("hasExperience", false)) score += 15;
-        if((boolean)analysis.getOrDefault("hasEducation", false)) score += 10;
-        if((boolean)analysis.getOrDefault("hasSkills", false)) score += 10;
-        
-        List<?> keywords = (List<?>)analysis.get("keywords");
-        if(keywords != null && !keywords.isEmpty()){
-            score += Math.min(15, keywords.size() * 2);
-        }
-        
-        int wordCount = (int)analysis.getOrDefault("wordCount", 0);
-        if(wordCount >= 300 && wordCount <= 1000) score += 10;
-        else if(wordCount < 200) score -= 10;
-        
-        return Math.min(100, Math.max(0, score));
-    }
-    
-    private String generateFeedback(int score, Map<String, Object> analysis) {
-        StringBuilder feedback = new StringBuilder();
-        
-        if(score >= 80){
-            feedback.append("Excellent! Your resume is well-optimized for ATS systems. ");
-        } else if(score >= 60){
-            feedback.append("Good job! Your resume is ATS-friendly with room for improvement. ");
-        } else if(score >= 40){
-            feedback.append("Your resume needs work to pass ATS systems effectively. ");
-        } else {
-            feedback.append("Your resume may struggle with ATS systems and needs significant improvements. ");
-        }
-        
-        if(!(boolean)analysis.getOrDefault("hasContactInfo", false)){
-            feedback.append("Add clear contact information. ");
-        }
-        if(!(boolean)analysis.getOrDefault("hasExperience", false)){
-            feedback.append("Include a work experience section. ");
-        }
-        if(!(boolean)analysis.getOrDefault("hasEducation", false)){
-            feedback.append("Add education details. ");
-        }
-        if(!(boolean)analysis.getOrDefault("hasSkills", false)){
-            feedback.append("Include a skills section. ");
-        }
-        
-        List<?> keywords = (List<?>)analysis.get("keywords");
-        if(keywords == null || keywords.size() < 5){
-            feedback.append("Add more relevant keywords and technical terms. ");
-        }
-        
-        return feedback.toString().trim();
-    }
-    
-    private List<String> extractKeywords(String text) {
-        Set<String> keywords = new HashSet<>();
-        String lower = text.toLowerCase();
-        
-        String[] techKeywords = {
-            "java", "python", "javascript", "react", "angular", "vue",
-            "spring", "node", "docker", "kubernetes", "aws", "azure",
-            "sql", "mongodb", "postgresql", "mysql", "git", "agile",
-            "scrum", "ci/cd", "devops", "rest", "api", "microservices",
-            "html", "css", "typescript", "c++", "c#", "ruby", "php",
-            "swift", "kotlin", "flutter", "android", "ios", "linux"
+
+    // ── Compute score from category sub-scores (fallback when atsScore missing) ─
+
+    @SuppressWarnings("unchecked")
+    private int computeScoreFromCategories(Map<String, Object> analysis) {
+        // Weighted formula matching the Gemini prompt instructions
+        double[][] categoryWeights = {
+            {categoryScore(analysis, "impactMetrics"),        0.25},
+            {categoryScore(analysis, "actionVerbs"),          0.15},
+            {categoryScore(analysis, "keywordDensity"),       0.15},
+            {categoryScore(analysis, "experienceDepth"),      0.15},
+            {categoryScore(analysis, "contactInfo"),          0.10},
+            {categoryScore(analysis, "formatting"),           0.10},
+            {categoryScore(analysis, "education"),            0.05},
+            {categoryScore(analysis, "professionalPresence"), 0.05},
         };
-        
-        for(String keyword : techKeywords){
-            if(lower.contains(keyword)){
-                keywords.add(keyword.substring(0, 1).toUpperCase() + keyword.substring(1));
+
+        double totalWeight = 0;
+        double weightedSum = 0;
+        for (double[] pair : categoryWeights) {
+            if (pair[0] >= 0) { // -1 means category not present
+                weightedSum += pair[0] * pair[1];
+                totalWeight += pair[1];
             }
         }
-        
-        return new ArrayList<>(keywords);
+
+        if (totalWeight == 0) {
+            // Pure basic-checks fallback if no categories at all
+            return computeBasicScore(analysis);
+        }
+
+        return (int) Math.round(weightedSum / totalWeight);
     }
-    
+
+    @SuppressWarnings("unchecked")
+    private double categoryScore(Map<String, Object> analysis, String key) {
+        // Look in atsDetails first
+        Object details = analysis.get("atsDetails");
+        if (details instanceof Map) {
+            Object cat = ((Map<?, ?>) details).get(key);
+            if (cat instanceof Map) {
+                Object s = ((Map<?, ?>) cat).get("score");
+                if (s instanceof Number) return ((Number) s).doubleValue();
+            }
+        }
+        // Also check flat analysis map (when categories are top-level)
+        Object cat = analysis.get(key);
+        if (cat instanceof Map) {
+            Object s = ((Map<?, ?>) cat).get("score");
+            if (s instanceof Number) return ((Number) s).doubleValue();
+        }
+        return -1; // category not available
+    }
+
+    private int computeBasicScore(Map<String, Object> analysis) {
+        int score = 40;
+        if (Boolean.TRUE.equals(analysis.get("hasContactInfo"))) score += 15;
+        if (Boolean.TRUE.equals(analysis.get("hasExperience")))  score += 20;
+        if (Boolean.TRUE.equals(analysis.get("hasEducation")))   score += 15;
+        if (Boolean.TRUE.equals(analysis.get("hasSkills")))      score += 10;
+        Object wc = analysis.get("wordCount");
+        if (wc instanceof Integer) {
+            int words = (Integer) wc;
+            if (words >= 300 && words <= 900) score += 10;
+            else if (words < 150) score -= 15;
+        }
+        return Math.min(100, score);
+    }
+
+    // ── Feedback string ────────────────────────────────────────────────────────
+
+    private String generateFeedback(int score) {
+        if (score >= 85) return "Outstanding! Your resume is highly optimised for ATS systems.";
+        if (score >= 70) return "Good job! Your resume is ATS-friendly. A few targeted improvements will push you to the top.";
+        if (score >= 55) return "Fair score. Address the issues highlighted below to significantly improve your ATS pass rate.";
+        if (score >= 40) return "Your resume needs notable improvements to pass ATS filters effectively.";
+        return "Your resume is likely to be filtered out by ATS systems. Prioritise the high-impact fixes listed below.";
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
     private boolean containsEmail(String text) {
-        Pattern emailPattern = Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}");
-        Matcher matcher = emailPattern.matcher(text);
-        return matcher.find();
+        return Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}").matcher(text).find();
     }
-    
+
     private boolean containsPhone(String text) {
-        Pattern phonePattern = Pattern.compile("\\+?[1-9]\\d{0,3}[-.\\s]?\\(?\\d{1,4}\\)?[-.\\s]?\\d{1,4}[-.\\s]?\\d{1,9}");
-        Matcher matcher = phonePattern.matcher(text);
-        return matcher.find();
+        return Pattern.compile("(\\+?\\d[\\d\\s\\-().]{6,}\\d)").matcher(text).find();
     }
-    
+
     private boolean containsLinks(String text) {
-        return text.contains("linkedin") || text.contains("github") || 
-               text.contains("http") || text.contains("www.");
+        return text.contains("http") || text.contains("linkedin") || text.contains("github");
     }
-    
+
     private String truncate(String text, int maxLength) {
-        if(text == null) return "";
+        if (text == null) return "";
         return text.length() > maxLength ? text.substring(0, maxLength) : text;
     }
 }

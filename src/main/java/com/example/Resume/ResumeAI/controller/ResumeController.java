@@ -29,6 +29,7 @@ import com.example.Resume.ResumeAI.repository.ResumeRepository;
 import com.example.Resume.ResumeAI.repository.UserRepository;
 import com.example.Resume.ResumeAI.service.ATSCheckerService;
 import com.example.Resume.ResumeAI.service.ResumeParserService;
+import com.example.Resume.ResumeAI.service.VectorStoreService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @RestController
@@ -41,6 +42,7 @@ public class ResumeController {
     private final UserRepository userRepository;
     private final ResumeParserService parserService;
     private final ATSCheckerService atsCheckerService;
+    private final VectorStoreService vectorStoreService;
     private final ObjectMapper objectMapper;
     private final String uploadDir = "./uploads";
     
@@ -48,11 +50,13 @@ public class ResumeController {
                            UserRepository userRepository,
                            ResumeParserService parserService,
                            ATSCheckerService atsCheckerService,
+                           VectorStoreService vectorStoreService,
                            ObjectMapper objectMapper) {
         this.resumeRepository = resumeRepository;
         this.userRepository = userRepository;
         this.parserService = parserService;
         this.atsCheckerService = atsCheckerService;
+        this.vectorStoreService = vectorStoreService;
         this.objectMapper = objectMapper;
         
         try {
@@ -155,11 +159,26 @@ public class ResumeController {
             resume.setHasExperience((Boolean) analysis.get("hasExperience"));
             resume.setHasEducation((Boolean) analysis.get("hasEducation"));
             resume.setHasSkills((Boolean) analysis.get("hasSkills"));
+            // Save full ATS details breakdown as JSON
+            if (analysis.containsKey("atsDetails")) {
+                try {
+                    resume.setAtsDetails(objectMapper.writeValueAsString(analysis.get("atsDetails")));
+                } catch (Exception e) {
+                    logger.warn("Could not serialize atsDetails", e);
+                }
+            }
             resume.setUser(user);
             
             resumeRepository.save(resume);
             
             logger.info("Resume saved successfully with ID: {}", resume.getId());
+            
+            // Generate vectors and index automatically in RAG vector store
+            try {
+                vectorStoreService.indexResume(resume);
+            } catch (Exception e) {
+                logger.error("Failed to auto-index resume {}", resume.getId(), e);
+            }
             
             return ResponseEntity.ok(convertToResponse(resume));
             
@@ -269,10 +288,17 @@ public class ResumeController {
         response.setHasSkills(resume.getHasSkills());
         
         try {
-            response.setKeywords(objectMapper.readValue(resume.getKeywords(), List.class));
+            if (resume.getKeywords() != null) {
+                response.setKeywords(objectMapper.readValue(resume.getKeywords(), List.class));
+            } else {
+                response.setKeywords(List.of());
+            }
         } catch (Exception e) {
             response.setKeywords(List.of());
         }
+        
+        // Pass through the rich ATS details JSON string (parsed on the frontend)
+        response.setAtsDetails(resume.getAtsDetails());
         
         return response;
     }

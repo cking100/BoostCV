@@ -34,6 +34,9 @@ public class ResumeResponse {
     private Boolean hasSkills;
     
     private LocalDateTime createdAt;
+    
+    // Raw JSON string of the deep ATS category breakdown from Gemini
+    private String atsDetails;
 
     // Constructors
     
@@ -182,5 +185,13 @@ public class ResumeResponse {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getAtsDetails() {
+        return atsDetails;
+    }
+
+    public void setAtsDetails(String atsDetails) {
+        this.atsDetails = atsDetails;
     }
 }

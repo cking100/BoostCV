@@ -36,6 +36,9 @@ public class Resume {
     
     @Column(columnDefinition = "JSON")
     private String missingKeywords;
+
+    @Column(columnDefinition = "TEXT")
+    private String atsDetails;
     
     private Boolean hasContactInfo;
     private Boolean hasEmail;
@@ -150,6 +153,14 @@ public class Resume {
 
     public void setMissingKeywords(String missingKeywords) {
         this.missingKeywords = missingKeywords;
+    }
+
+    public String getAtsDetails() {
+        return atsDetails;
+    }
+
+    public void setAtsDetails(String atsDetails) {
+        this.atsDetails = atsDetails;
     }
 
     public Boolean getHasContactInfo() {

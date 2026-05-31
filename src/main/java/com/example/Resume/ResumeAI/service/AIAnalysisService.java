@@ -17,12 +17,18 @@ public class AIAnalysisService {
     
     private static final Logger logger = LoggerFactory.getLogger(AIAnalysisService.class);
     
+    private final GeminiAIService geminiAIService;
     private final GroqAIService groqAIService;
     private final ObjectMapper objectMapper;
     
-    public AIAnalysisService(GroqAIService groqAIService, ObjectMapper objectMapper) {
+    public AIAnalysisService(GeminiAIService geminiAIService, GroqAIService groqAIService, ObjectMapper objectMapper) {
+        this.geminiAIService = geminiAIService;
         this.groqAIService = groqAIService;
         this.objectMapper = objectMapper;
+    }
+    
+    private boolean useGroq() {
+        return groqAIService.isAvailable() && !geminiAIService.isAvailable();
     }
     
     public Map<String, Object> analyzeResumeForJob(String resumeText, String jobDescription, 
@@ -68,19 +74,9 @@ public class AIAnalysisService {
     
     private int calculateMatchScore(String resume, String job) {
         try{
-            String prompt = String.format(
-                "Analyze how well this resume matches the job. Give a match score from 0-100.\n\n" +
-                "Job:\n%s\n\nResume:\n%s\n\n" +
-                "Respond with ONLY a number between 0-100:",
-                truncate(job, 2000), truncate(resume, 3000)
-            );
-            
-            String response = groqAIService.generateContentSuggestions(resume, job);
-            String scoreStr = response.replaceAll("[^0-9]", "");
-            if(!scoreStr.isEmpty()){
-                int score = Integer.parseInt(scoreStr.substring(0, Math.min(scoreStr.length(), 3)));
-                return Math.min(100, Math.max(0, score));
-            }
+            return useGroq()
+                ? groqAIService.calculateMatchScore(resume, job)
+                : geminiAIService.calculateMatchScore(resume, job);
         }catch(Exception e){
             logger.error("Error calculating match score", e);
         }
@@ -89,7 +85,9 @@ public class AIAnalysisService {
     
     private String generateOverallFeedback(String resume, String job) {
         try{
-            return groqAIService.generateResumeImprovement(truncate(resume, 3000), truncate(job, 2000));
+            return useGroq()
+                ? groqAIService.generateResumeImprovement(truncate(resume, 3000), truncate(job, 2000))
+                : geminiAIService.generateResumeImprovement(truncate(resume, 3000), truncate(job, 2000));
         }catch(Exception e){
             logger.error("Error generating feedback", e);
             return "Unable to generate feedback at this time.";
@@ -98,14 +96,9 @@ public class AIAnalysisService {
     
     private List<String> extractMatchedKeywords(String resume, String job) {
         try{
-            String prompt = String.format(
-                "List technical keywords and skills that appear in BOTH the job and resume. " +
-                "Return ONLY a comma-separated list, no other text.\n\n" +
-                "Job:\n%s\n\nResume:\n%s\n\nMatched keywords:",
-                truncate(job, 2000), truncate(resume, 3000)
-            );
-            
-            String response = groqAIService.analyzeMissingKeywords(resume, job);
+            String response = useGroq()
+                ? groqAIService.analyzeMatchedKeywords(resume, job)
+                : geminiAIService.analyzeMatchedKeywords(resume, job);
             return parseKeywordList(response);
         }catch(Exception e){
             logger.error("Error extracting matched keywords", e);
@@ -115,7 +108,9 @@ public class AIAnalysisService {
     
     private List<String> extractMissingKeywords(String resume, String job) {
         try{
-            String response = groqAIService.analyzeMissingKeywords(truncate(resume, 3000), truncate(job, 2000));
+            String response = useGroq()
+                ? groqAIService.analyzeMissingKeywords(truncate(resume, 3000), truncate(job, 2000))
+                : geminiAIService.analyzeMissingKeywords(truncate(resume, 3000), truncate(job, 2000));
             return parseKeywordList(response);
         }catch(Exception e){
             logger.error("Error extracting missing keywords", e);
@@ -125,7 +120,9 @@ public class AIAnalysisService {
     
     private List<String> checkGrammar(String resume) {
         try{
-            String response = groqAIService.checkGrammar(truncate(resume, 4000));
+            String response = useGroq()
+                ? groqAIService.checkGrammar(truncate(resume, 4000))
+                : geminiAIService.checkGrammar(truncate(resume, 4000));
             return parseIssuesList(response);
         }catch(Exception e){
             logger.error("Error checking grammar", e);
@@ -154,7 +151,9 @@ public class AIAnalysisService {
     
     private List<String> generateSuggestions(String resume, String job) {
         try{
-            String response = groqAIService.generateContentSuggestions(truncate(resume, 3000), truncate(job, 2000));
+            String response = useGroq()
+                ? groqAIService.generateContentSuggestions(truncate(resume, 3000), truncate(job, 2000))
+                : geminiAIService.generateContentSuggestions(truncate(resume, 3000), truncate(job, 2000));
             return parseIssuesList(response);
         }catch(Exception e){
             logger.error("Error generating suggestions", e);
@@ -177,7 +176,9 @@ public class AIAnalysisService {
                 truncate(job, 2000), truncate(resume, 3000)
             );
             
-            String response = groqAIService.generateResumeImprovement(resume, job);
+            String response = useGroq()
+                ? groqAIService.generateResumeImprovement(resume, job)
+                : geminiAIService.generateResumeImprovement(resume, job);
             
             List<String> strengths = extractSection(response, "strength");
             List<String> weaknesses = extractSection(response, "weakness");
@@ -204,7 +205,9 @@ public class AIAnalysisService {
                 truncate(job, 2000), truncate(resume, 3000)
             );
             
-            return groqAIService.generateContentSuggestions(resume, job);
+            return useGroq()
+                ? groqAIService.generateContentSuggestions(resume, job)
+                : geminiAIService.generateContentSuggestions(resume, job);
         }catch(Exception e){
             logger.error("Error generating improved version", e);
             return "Add more specific achievements and quantify your impact.";
