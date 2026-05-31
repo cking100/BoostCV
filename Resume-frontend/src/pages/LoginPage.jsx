@@ -112,7 +112,7 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
           <div className="auth-brand-icon">
             <Zap size={22} />
           </div>
-          <span className="auth-brand-name">ResumeAI</span>
+          <span className="auth-brand-name">BoostV</span>
           <span className="auth-brand-badge">Beta</span>
         </div>
 
@@ -123,7 +123,7 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
             with AI-power
           </h2>
           <p>
-            ResumeAI analyses your resume against ATS systems,
+             analyses your resume against ATS systems,
             matches you to jobs, and coaches you — all in one place.
           </p>
         </div>

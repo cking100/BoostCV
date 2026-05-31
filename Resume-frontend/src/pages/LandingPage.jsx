@@ -13,7 +13,7 @@ import './LandingPage.css';
 const AI_FEATURES = [
   {
     id: 'ats',
-    icon: '🎯',
+    icon: '',
     iconClass: 'indigo',
     accent: 'indigo',
     title: 'ATS Score & Analysis',
@@ -176,7 +176,7 @@ export default function LandingPage({ setCurrentView, setCurrentResume }) {
             <div className="lp-logo-icon">
               <Zap size={20} />
             </div>
-            <span className="lp-logo-name">ResumeAI</span>
+            <span className="lp-logo-name">BoostCV</span>
             <span className="lp-badge">Beta</span>
           </div>
 
