@@ -31,10 +31,10 @@ public class Resume {
     @Column(columnDefinition = "TEXT")
     private String feedback;
     
-    @Column(columnDefinition = "JSON")
+    @Column(columnDefinition = "TEXT")
     private String keywords;
     
-    @Column(columnDefinition = "JSON")
+    @Column(columnDefinition = "TEXT")
     private String missingKeywords;
 
     @Column(columnDefinition = "TEXT")
