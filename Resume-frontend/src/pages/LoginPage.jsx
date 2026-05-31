@@ -1,7 +1,7 @@
 // src/pages/LoginPage.jsx
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Zap, Loader2 } from 'lucide-react';
-import axios from 'axios';
+import api from './api';
 import './auth.css';
 
 // ── SVG icons for OAuth providers ────────────────────────────────────────────
@@ -61,35 +61,22 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
     }
 
     try {
-      const response = await axios.post('/api/auth/login', {
-        email: formData.email,
-        password: formData.password
-      });
+      // api.login uses VITE_API_URL in production, local proxy in dev
+      const data = await api.login(formData.email, formData.password);
 
-      if (response.data && response.data.token) {
-        // TODO(security): Migrate token storage from localStorage to HttpOnly cookies for production.
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify({
-          email: response.data.email,
-          firstName: response.data.firstName,
-          lastName: response.data.lastName
-        }));
-
-        if (formData.rememberMe) {
-          localStorage.setItem('rememberedEmail', formData.email);
-          // NOTE: Password is intentionally NOT stored — security risk.
-          localStorage.setItem('rememberMe', 'true');
-        } else {
-          localStorage.removeItem('rememberedEmail');
-          localStorage.removeItem('rememberMe');
-        }
-
-        if (onLoginSuccess) onLoginSuccess();
+      if (formData.rememberMe) {
+        localStorage.setItem('rememberedEmail', formData.email);
+        // NOTE: Password is intentionally NOT stored — security risk.
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberMe');
       }
+
+      if (onLoginSuccess) onLoginSuccess();
     } catch (err) {
       // Log minimal info — no credentials in logs
-      const msg = err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.';
-      setError(typeof msg === 'string' ? msg : 'Login failed. Please check your credentials.');
+      setError(err.message || 'Login failed. Please check your credentials.');
       setIsLoading(false);
     }
   };
@@ -98,7 +85,8 @@ export default function LoginPage({ setCurrentView, onLoginSuccess }) {
   // Redirects to Spring Security OAuth2 endpoints which handle the full flow.
   // Backend must have spring-boot-starter-oauth2-client configured.
   const handleOAuth = (provider) => {
-    const BACKEND = '';
+    // Use Render backend URL in production, empty string (relative) in dev
+    const BACKEND = import.meta.env.VITE_API_URL || '';
     // The redirect_uri on the backend should send back a JWT via
     // a redirect to /oauth2/callback?token=... on the frontend.
     window.location.href = `${BACKEND}/oauth2/authorization/${provider}`;
